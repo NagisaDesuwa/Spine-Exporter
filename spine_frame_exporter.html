@@ -1,0 +1,2418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spine 动画序列帧导出工具</title>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    min-height: 100vh;
+}
+.app-header {
+    background: #16213e;
+    padding: 15px 30px;
+    border-bottom: 2px solid #0f3460;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+.app-header h1 {
+    font-size: 20px;
+    color: #e94560;
+}
+.app-header .version {
+    font-size: 12px;
+    color: #888;
+    background: #0f3460;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+.main-container {
+    display: flex;
+    height: calc(100vh - 60px);
+}
+.sidebar {
+    width: 320px;
+    background: #16213e;
+    border-right: 1px solid #0f3460;
+    overflow-y: auto;
+    padding: 15px;
+    flex-shrink: 0;
+}
+.canvas-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    background: repeating-conic-gradient(#222 0% 25%, #2a2a2a 0% 50%) 50% / 20px 20px;
+}
+.panel {
+    margin-bottom: 15px;
+    background: #1a1a2e;
+    border-radius: 8px;
+    overflow: hidden;
+}
+.panel-header {
+    background: #0f3460;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #e94560;
+    cursor: pointer;
+    user-select: none;
+}
+.panel-body {
+    padding: 12px;
+}
+.btn {
+    display: inline-block;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+.btn-primary {
+    background: #e94560;
+    color: white;
+}
+.btn-primary:hover { background: #c73e54; }
+.btn-primary:disabled { background: #555; cursor: not-allowed; }
+.btn-secondary {
+    background: #0f3460;
+    color: #e0e0e0;
+}
+.btn-secondary:hover { background: #1a4a8a; }
+.btn-success {
+    background: #2ecc71;
+    color: white;
+}
+.btn-success:hover { background: #27ae60; }
+.btn-success:disabled { background: #555; cursor: not-allowed; }
+.btn-block {
+    display: block;
+    width: 100%;
+    text-align: center;
+}
+.form-group {
+    margin-bottom: 10px;
+}
+.form-group label {
+    display: block;
+    font-size: 12px;
+    color: #aaa;
+    margin-bottom: 4px;
+}
+.form-group input, .form-group select {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid #0f3460;
+    border-radius: 4px;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-size: 13px;
+    font-family: inherit;
+}
+.form-group input:focus, .form-group select:focus {
+    outline: none;
+    border-color: #e94560;
+}
+.form-row {
+    display: flex;
+    gap: 10px;
+}
+.form-row .form-group { flex: 1; }
+.animation-list {
+    max-height: 250px;
+    overflow-y: auto;
+}
+.animation-item {
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background 0.15s;
+}
+.animation-item:hover { background: #0f3460; }
+.animation-item.active { background: #e94560; color: white; }
+.animation-item .duration {
+    font-size: 11px;
+    color: #888;
+}
+.animation-item.active .duration { color: rgba(255,255,255,0.7); }
+.skin-list {
+    max-height: 150px;
+    overflow-y: auto;
+}
+.skin-item {
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.skin-item:hover { background: #0f3460; }
+.skin-item.active { background: #0f3460; border: 1px solid #e94560; }
+.skin-item input[type="checkbox"] { width: auto; flex-shrink: 0; }
+.skin-item label { margin: 0; cursor: pointer; color: #e0e0e0; flex: 1; }
+.skin-controls { display: flex; gap: 5px; margin-bottom: 8px; }
+.skin-controls .btn { flex: 1; font-size: 12px; padding: 4px 8px; }
+.controls {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+.controls .btn { flex: 1; font-size: 12px; padding: 6px 8px; }
+.progress-container {
+    margin-top: 10px;
+    display: none;
+}
+.progress-bar-wrapper {
+    background: #0f3460;
+    border-radius: 10px;
+    overflow: hidden;
+    height: 20px;
+}
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #e94560, #2ecc71);
+    width: 0%;
+    transition: width 0.1s;
+    border-radius: 10px;
+}
+.progress-text {
+    font-size: 11px;
+    color: #aaa;
+    margin-top: 5px;
+    text-align: center;
+}
+.status-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(22, 33, 62, 0.9);
+    padding: 8px 15px;
+    font-size: 12px;
+    color: #aaa;
+    display: flex;
+    justify-content: space-between;
+}
+.file-drop-zone {
+    border: 2px dashed #0f3460;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-bottom: 10px;
+}
+.file-drop-zone:hover, .file-drop-zone.drag-over {
+    border-color: #e94560;
+    background: rgba(233, 69, 96, 0.1);
+}
+.file-drop-zone p {
+    font-size: 13px;
+    color: #888;
+    margin-top: 5px;
+}
+.file-info {
+    font-size: 12px;
+    color: #2ecc71;
+    margin-top: 8px;
+    word-break: break-all;
+}
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.checkbox-group input[type="checkbox"] {
+    width: auto;
+}
+.checkbox-group label {
+    margin: 0;
+    font-size: 13px;
+    color: #e0e0e0;
+    cursor: pointer;
+}
+.batch-status {
+    font-size: 12px;
+    color: #aaa;
+    margin-top: 5px;
+}
+canvas#spineCanvas {
+    image-rendering: pixelated;
+}
+.export-options {
+    border-top: 1px solid #0f3460;
+    padding-top: 10px;
+    margin-top: 10px;
+}
+</style>
+</head>
+<body>
+
+<div class="app-header">
+    <h1>Spine 序列帧导出工具</h1>
+    <span class="version" id="versionBadge">支持 Spine 3.x / 4.x 自动识别</span>
+</div>
+
+<div class="main-container">
+    <div class="sidebar">
+        <!-- 文件加载 -->
+        <div class="panel">
+            <div class="panel-header">文件加载</div>
+            <div class="panel-body">
+                <div class="file-drop-zone" id="dropZone" onclick="document.getElementById('folderInput').click()">
+                    <strong>点击选择角色文件夹</strong>
+                    <p>选择包含 .skel / .atlas / .png 的文件夹</p>
+                    <input type="file" id="folderInput" webkitdirectory style="display:none">
+                </div>
+                <div id="fileInfo" class="file-info" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- 皮肤选择 -->
+        <div class="panel" id="skinPanel" style="display:none">
+            <div class="panel-header">皮肤 (<span id="skinCount">0</span>)</div>
+            <div class="panel-body">
+                <div class="skin-controls" id="skinControls" style="display:none">
+                    <button class="btn btn-secondary" onclick="toggleAllSkins(true)">全选</button>
+                    <button class="btn btn-secondary" onclick="toggleAllSkins(false)">取消全选</button>
+                </div>
+                <div class="skin-list" id="skinList"></div>
+            </div>
+        </div>
+
+        <!-- 动画列表 -->
+        <div class="panel" id="animPanel" style="display:none">
+            <div class="panel-header">动画列表 (<span id="animCount">0</span>)</div>
+            <div class="panel-body">
+                <div class="controls">
+                    <button class="btn btn-secondary" onclick="playAnim()" id="btnPlay">&#9654; 播放</button>
+                    <button class="btn btn-secondary" onclick="pauseAnim()" id="btnPause">&#9646;&#9646; 暂停</button>
+                    <button class="btn btn-secondary" onclick="stopAnim()">&#9632; 停止</button>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="loopCheck" checked>
+                    <label for="loopCheck">循环播放</label>
+                </div>
+                <div class="animation-list" id="animList"></div>
+            </div>
+        </div>
+
+        <!-- 渲染设置 -->
+        <div class="panel" id="settingsPanel" style="display:none">
+            <div class="panel-header">渲染设置</div>
+            <div class="panel-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>画布宽度</label>
+                        <input type="number" id="canvasWidth" value="512" min="64" max="4096">
+                    </div>
+                    <div class="form-group">
+                        <label>画布高度</label>
+                        <input type="number" id="canvasHeight" value="512" min="64" max="4096">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>缩放比例</label>
+                        <input type="number" id="scaleInput" value="1.0" min="0.1" max="10" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>帧率 (FPS)</label>
+                        <input type="number" id="fpsInput" value="30" min="1" max="120">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>X 偏移</label>
+                        <input type="number" id="offsetX" value="0" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Y 偏移</label>
+                        <input type="number" id="offsetY" value="0" step="1">
+                    </div>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="transparentBg" checked>
+                    <label for="transparentBg">透明背景</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="premultiplied" checked>
+                    <label for="premultiplied">预乘Alpha</label>
+                </div>
+                <button class="btn btn-secondary btn-block" onclick="applySettings()" style="margin-top:5px">应用设置</button>
+                <div style="display:flex;gap:5px;margin-top:5px">
+                    <button class="btn btn-secondary" style="flex:1" onclick="autoFit()">适配姿势</button>
+                    <button class="btn btn-secondary" style="flex:1" onclick="autoFitAnimation()">适配动画</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 导出 -->
+        <div class="panel" id="exportPanel" style="display:none">
+            <div class="panel-header">导出</div>
+            <div class="panel-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>导出宽度</label>
+                        <input type="number" id="exportWidth" value="512" min="64" max="8192">
+                    </div>
+                    <div class="form-group">
+                        <label>导出高度</label>
+                        <input type="number" id="exportHeight" value="512" min="64" max="8192">
+                    </div>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="syncExportSize" checked>
+                    <label for="syncExportSize">与预览画布同尺寸</label>
+                </div>
+                <div class="form-group">
+                    <label>文件名前缀</label>
+                    <input type="text" id="prefixInput" value="" placeholder="角色名_动画名">
+                </div>
+                <div class="form-group">
+                    <label>导出格式</label>
+                    <select id="exportFormat">
+                        <option value="png">PNG (透明)</option>
+                        <option value="jpg">JPG</option>
+                        <option value="webp">WebP</option>
+                    </select>
+                </div>
+                <div style="display:flex;gap:5px">
+                    <button class="btn btn-success" style="flex:1" onclick="exportCurrentAnimation()" id="btnExport">
+                        导出序列帧
+                    </button>
+                    <button class="btn btn-success" style="flex:1" onclick="exportCurrentAnimationAsGif()" id="btnExportGif">
+                        导出 GIF
+                    </button>
+                </div>
+
+                <div class="export-options">
+                    <div style="display:flex;gap:5px">
+                        <button class="btn btn-primary" style="flex:1" onclick="exportAllAnimations()" id="btnExportAll">
+                            批量序列帧
+                        </button>
+                        <button class="btn btn-primary" style="flex:1" onclick="exportAllAnimationsAsGif()" id="btnExportAllGif">
+                            批量 GIF
+                        </button>
+                    </div>
+                    <div class="batch-status" id="batchStatus"></div>
+                </div>
+
+                <div class="progress-container" id="progressContainer">
+                    <div class="progress-bar-wrapper">
+                        <div class="progress-bar" id="progressBar"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">准备中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="canvas-area" id="canvasArea">
+        <canvas id="spineCanvas" width="512" height="512"></canvas>
+        <div class="status-bar" id="statusBar">
+            <span id="statusLeft">等待加载文件...</span>
+            <span id="statusRight"></span>
+        </div>
+    </div>
+</div>
+
+<script>
+// ==================== 全局状态 ====================
+let gl, spineCtx, shader, batcher, mvp, skeletonRenderer;
+let skeleton, animationState, animationStateData, skeletonData;
+let bounds = null;
+let isPlaying = false;
+let lastFrameTime = 0;
+let currentAnimName = '';
+let loadedFiles = {};
+let isExporting = false;
+let animFrameId = null;
+let currentRuntimeVersion = null;
+let is4x = false;
+let isJsonSkel = false;
+let animBoundsCache = {};
+
+// ==================== 版本检测 ====================
+function detectSpineVersion(data) {
+    const bytes = new Uint8Array(data);
+
+    // 检查是否为 JSON 格式 (以 '{' 开头)
+    if (bytes[0] === 0x7B) {
+        try {
+            const text = new TextDecoder().decode(bytes);
+            const json = JSON.parse(text);
+            if (json.skeleton && json.skeleton.spine) {
+                return { version: json.skeleton.spine, isJson: true };
+            }
+        } catch (e) {}
+        return { version: null, isJson: true };
+    }
+
+    // 二进制格式: 依次读取 hash 字符串和 version 字符串
+    let offset = 0;
+
+    function readVarint() {
+        let result = 0, shift = 0;
+        while (offset < bytes.length && shift < 35) {
+            const b = bytes[offset++];
+            result |= (b & 0x7F) << shift;
+            if (!(b & 0x80)) break;
+            shift += 7;
+        }
+        return result;
+    }
+
+    function readString() {
+        const byteCount = readVarint();
+        if (byteCount <= 0) return null;
+        if (byteCount === 1) return '';
+        const len = byteCount - 1;
+        if (offset + len > bytes.length) return null;
+        const strBytes = bytes.slice(offset, offset + len);
+        offset += len;
+        return new TextDecoder('utf-8').decode(strBytes);
+    }
+
+    readString(); // 跳过 hash
+    const version = readString();
+    return { version: version, isJson: false };
+}
+
+function getRuntimeInfo(versionStr) {
+    if (!versionStr) return null;
+    const m = versionStr.match(/^(\d+)\.(\d+)/);
+    if (!m) return null;
+    const major = parseInt(m[1]);
+    const minor = parseInt(m[2]);
+    const branch = major + '.' + minor;
+
+    if (major === 3) {
+        return {
+            url: 'https://cdn.jsdelivr.net/gh/EsotericSoftware/spine-runtimes@' + branch + '/spine-ts/build/spine-webgl.js',
+            runtimeBranch: branch
+        };
+    } else if (major === 4) {
+        return {
+            url: 'https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-webgl@' + branch + '/dist/iife/spine-webgl.js',
+            runtimeBranch: branch
+        };
+    }
+    return null;
+}
+
+function loadSpineRuntime(url) {
+    return new Promise(function(resolve, reject) {
+        var old = document.getElementById('spineRuntimeScript');
+        if (old) old.remove();
+        window.spine = undefined;
+
+        var script = document.createElement('script');
+        script.id = 'spineRuntimeScript';
+        script.src = url;
+        script.onload = function() {
+            if (window.spine) resolve();
+            else reject(new Error('Spine 运行时加载后未找到 spine 命名空间'));
+        };
+        script.onerror = function() {
+            reject(new Error('无法加载 Spine 运行时，请检查网络连接。\nURL: ' + url));
+        };
+        document.head.appendChild(script);
+    });
+}
+
+// ==================== 3.5/3.6/3.7 SkeletonBinary 补丁 ====================
+// 这些版本的 TypeScript 运行时没有 SkeletonBinary，从 Java 3.6 运行时移植
+function injectSkeletonBinary() {
+    if (typeof spine === 'undefined' || typeof spine.SkeletonBinary === 'function') return;
+
+    // ---- BinaryInput ----
+    function BinaryInput(data) {
+        this.index = 0;
+        this.buffer = new DataView(data.buffer);
+    }
+    BinaryInput.prototype.readByte = function() { return this.buffer.getInt8(this.index++); };
+    BinaryInput.prototype.readUByte = function() { return this.buffer.getUint8(this.index++); };
+    BinaryInput.prototype.readShort = function() { var v = this.buffer.getInt16(this.index); this.index += 2; return v; };
+    BinaryInput.prototype.readInt32 = function() { var v = this.buffer.getInt32(this.index); this.index += 4; return v; };
+    BinaryInput.prototype.readInt = function(optimizePositive) {
+        var b = this.readUByte(), result = b & 0x7F;
+        if ((b & 0x80) != 0) { b = this.readUByte(); result |= (b & 0x7F) << 7;
+        if ((b & 0x80) != 0) { b = this.readUByte(); result |= (b & 0x7F) << 14;
+        if ((b & 0x80) != 0) { b = this.readUByte(); result |= (b & 0x7F) << 21;
+        if ((b & 0x80) != 0) { b = this.readUByte(); result |= (b & 0x7F) << 28; }}}}
+        return optimizePositive ? result : ((result >>> 1) ^ -(result & 1));
+    };
+    BinaryInput.prototype.readFloat = function() { var v = this.buffer.getFloat32(this.index); this.index += 4; return v; };
+    BinaryInput.prototype.readBoolean = function() { return this.readUByte() != 0; };
+    BinaryInput.prototype.readString = function() {
+        var byteCount = this.readInt(true);
+        if (byteCount == 0) return null;
+        if (byteCount == 1) return "";
+        byteCount--;
+        var chars = "";
+        for (var i = 0; i < byteCount;) {
+            var b = this.readUByte();
+            switch (b >> 4) {
+                case 12: case 13:
+                    chars += String.fromCharCode(((b & 0x1F) << 6 | this.readUByte() & 0x3F)); i += 2; break;
+                case 14:
+                    chars += String.fromCharCode(((b & 0x0F) << 12 | (this.readUByte() & 0x3F) << 6 | this.readUByte() & 0x3F)); i += 3; break;
+                default:
+                    chars += String.fromCharCode(b); i++;
+            }
+        }
+        return chars;
+    };
+
+    // ---- 常量 ----
+    var BONE_ROTATE = 0, BONE_TRANSLATE = 1, BONE_SCALE = 2, BONE_SHEAR = 3;
+    var SLOT_ATTACHMENT = 0, SLOT_COLOR = 1, SLOT_TWO_COLOR = 2;
+    var PATH_POSITION = 0, PATH_SPACING = 1, PATH_MIX = 2;
+    var CURVE_LINEAR = 0, CURVE_STEPPED = 1, CURVE_BEZIER = 2;
+
+    function rgba8888ToColor(color, value) {
+        color.r = ((value & 0xff000000) >>> 24) / 255;
+        color.g = ((value & 0x00ff0000) >>> 16) / 255;
+        color.b = ((value & 0x0000ff00) >>> 8) / 255;
+        color.a = (value & 0x000000ff) / 255;
+    }
+    function rgb888ToColor(color, value) {
+        color.r = ((value & 0x00ff0000) >>> 16) / 255;
+        color.g = ((value & 0x0000ff00) >>> 8) / 255;
+        color.b = (value & 0x000000ff) / 255;
+    }
+
+    // ---- SkeletonBinary ----
+    function SkeletonBinary(attachmentLoader) {
+        this.attachmentLoader = attachmentLoader;
+        this.scale = 1;
+        this.linkedMeshes = [];
+    }
+
+    SkeletonBinary.prototype.readSkeletonData = function(binary) {
+        var input = new BinaryInput(binary);
+        var skeletonData = new spine.SkeletonData();
+        var scale = this.scale;
+
+        skeletonData.hash = input.readString();
+        skeletonData.version = input.readString();
+        skeletonData.width = input.readFloat();
+        skeletonData.height = input.readFloat();
+
+        var nonessential = input.readBoolean();
+        if (nonessential) {
+            skeletonData.fps = input.readFloat();
+            skeletonData.imagesPath = input.readString();
+        }
+
+        // Bones
+        for (var i = 0, n = input.readInt(true); i < n; i++) {
+            var name = input.readString();
+            var parent = i == 0 ? null : skeletonData.bones[input.readInt(true)];
+            var data = new spine.BoneData(i, name, parent);
+            data.rotation = input.readFloat();
+            data.x = input.readFloat() * scale;
+            data.y = input.readFloat() * scale;
+            data.scaleX = input.readFloat();
+            data.scaleY = input.readFloat();
+            data.shearX = input.readFloat();
+            data.shearY = input.readFloat();
+            data.length = input.readFloat() * scale;
+            data.transformMode = input.readInt(true);
+            if (nonessential) rgba8888ToColor(data.color, input.readInt32());
+            skeletonData.bones.push(data);
+        }
+
+        // Slots
+        for (var i = 0, n = input.readInt(true); i < n; i++) {
+            var slotName = input.readString();
+            var boneData = skeletonData.bones[input.readInt(true)];
+            var slotData = new spine.SlotData(i, slotName, boneData);
+            rgba8888ToColor(slotData.color, input.readInt32());
+            var darkColor = input.readInt32();
+            if (darkColor != -1) {
+                slotData.darkColor = new spine.Color(1, 1, 1, 1);
+                rgb888ToColor(slotData.darkColor, darkColor);
+            }
+            slotData.attachmentName = input.readString();
+            slotData.blendMode = input.readInt(true);
+            skeletonData.slots.push(slotData);
+        }
+
+        // IK constraints
+        for (var i = 0, n = input.readInt(true); i < n; i++) {
+            var ikData = new spine.IkConstraintData(input.readString());
+            ikData.order = input.readInt(true);
+            for (var ii = 0, nn = input.readInt(true); ii < nn; ii++)
+                ikData.bones.push(skeletonData.bones[input.readInt(true)]);
+            ikData.target = skeletonData.bones[input.readInt(true)];
+            ikData.mix = input.readFloat();
+            ikData.bendDirection = input.readByte();
+            skeletonData.ikConstraints.push(ikData);
+        }
+
+        // Transform constraints
+        for (var i = 0, n = input.readInt(true); i < n; i++) {
+            var tcData = new spine.TransformConstraintData(input.readString());
+            tcData.order = input.readInt(true);
+            for (var ii = 0, nn = input.readInt(true); ii < nn; ii++)
+                tcData.bones.push(skeletonData.bones[input.readInt(true)]);
+            tcData.target = skeletonData.bones[input.readInt(true)];
+            tcData.local = input.readBoolean();
+            tcData.relative = input.readBoolean();
+            tcData.offsetRotation = input.readFloat();
+            tcData.offsetX = input.readFloat() * scale;
+            tcData.offsetY = input.readFloat() * scale;
+            tcData.offsetScaleX = input.readFloat();
+            tcData.offsetScaleY = input.readFloat();
+            tcData.offsetShearY = input.readFloat();
+            tcData.rotateMix = input.readFloat();
+            tcData.translateMix = input.readFloat();
+            tcData.scaleMix = input.readFloat();
+            tcData.shearMix = input.readFloat();
+            skeletonData.transformConstraints.push(tcData);
+        }
+
+        // Path constraints
+        for (var i = 0, n = input.readInt(true); i < n; i++) {
+            var pcData = new spine.PathConstraintData(input.readString());
+            pcData.order = input.readInt(true);
+            for (var ii = 0, nn = input.readInt(true); ii < nn; ii++)
+                pcData.bones.push(skeletonData.bones[input.readInt(true)]);
+            pcData.target = skeletonData.slots[input.readInt(true)];
+            pcData.positionMode = input.readInt(true);
+            pcData.spacingMode = input.readInt(true);
+            pcData.rotateMode = input.readInt(true);
+            pcData.offsetRotation = input.readFloat();
+            pcData.position = input.readFloat();
+            if (pcData.positionMode == spine.PositionMode.Fixed) pcData.position *= scale;
+            pcData.spacing = input.readFloat();
+            if (pcData.spacingMode == spine.SpacingMode.Length || pcData.spacingMode == spine.SpacingMode.Fixed) pcData.spacing *= scale;
+            pcData.rotateMix = input.readFloat();
+            pcData.translateMix = input.readFloat();
+            skeletonData.pathConstraints.push(pcData);
+        }
+
+        // Default skin
+        var defaultSkin = this.readSkin(input, skeletonData, "default", nonessential);
+        if (defaultSkin != null) {
+            skeletonData.defaultSkin = defaultSkin;
+            skeletonData.skins.push(defaultSkin);
+        }
+
+        // Skins
+        for (var i = 0, n = input.readInt(true); i < n; i++)
+            skeletonData.skins.push(this.readSkin(input, skeletonData, input.readString(), nonessential));
+
+        // Linked meshes
+        for (var i = 0; i < this.linkedMeshes.length; i++) {
+            var lm = this.linkedMeshes[i];
+            var skin = lm.skin == null ? skeletonData.defaultSkin : skeletonData.findSkin(lm.skin);
+            if (skin == null) throw new Error("Skin not found: " + lm.skin);
+            var parentAttachment = skin.getAttachment(lm.slotIndex, lm.parent);
+            if (parentAttachment == null) throw new Error("Parent mesh not found: " + lm.parent);
+            lm.mesh.setParentMesh(parentAttachment);
+            lm.mesh.updateUVs();
+        }
+        this.linkedMeshes.length = 0;
+
+        // Events
+        for (var i = 0, n = input.readInt(true); i < n; i++) {
+            var evData = new spine.EventData(input.readString());
+            evData.intValue = input.readInt(false);
+            evData.floatValue = input.readFloat();
+            evData.stringValue = input.readString();
+            skeletonData.events.push(evData);
+        }
+
+        // Animations
+        for (var i = 0, n = input.readInt(true); i < n; i++)
+            this.readAnimation(input, input.readString(), skeletonData);
+
+        return skeletonData;
+    };
+
+    SkeletonBinary.prototype.readSkin = function(input, skeletonData, skinName, nonessential) {
+        var slotCount = input.readInt(true);
+        if (slotCount == 0) return null;
+        var skin = new spine.Skin(skinName);
+        for (var i = 0; i < slotCount; i++) {
+            var slotIndex = input.readInt(true);
+            for (var ii = 0, nn = input.readInt(true); ii < nn; ii++) {
+                var name = input.readString();
+                var attachment = this.readAttachment(input, skeletonData, skin, slotIndex, name, nonessential);
+                if (attachment != null) skin.addAttachment(slotIndex, name, attachment);
+            }
+        }
+        return skin;
+    };
+
+    SkeletonBinary.prototype.readAttachment = function(input, skeletonData, skin, slotIndex, attachmentName, nonessential) {
+        var scale = this.scale;
+        var name = input.readString();
+        if (name == null) name = attachmentName;
+        var type = input.readByte();
+
+        switch (type) {
+        case 0 /* Region */: {
+            var path = input.readString();
+            var rotation = input.readFloat();
+            var x = input.readFloat();
+            var y = input.readFloat();
+            var scaleX = input.readFloat();
+            var scaleY = input.readFloat();
+            var width = input.readFloat();
+            var height = input.readFloat();
+            var color = input.readInt32();
+            if (path == null) path = name;
+            var region = this.attachmentLoader.newRegionAttachment(skin, name, path);
+            if (region == null) return null;
+            region.path = path;
+            region.x = x * scale;
+            region.y = y * scale;
+            region.scaleX = scaleX;
+            region.scaleY = scaleY;
+            region.rotation = rotation;
+            region.width = width * scale;
+            region.height = height * scale;
+            rgba8888ToColor(region.color, color);
+            region.updateOffset();
+            return region;
+        }
+        case 1 /* BoundingBox */: {
+            var vertexCount = input.readInt(true);
+            var vertices = this.readVertices(input, vertexCount);
+            if (nonessential) input.readInt32(); // color
+            var box = this.attachmentLoader.newBoundingBoxAttachment(skin, name);
+            if (box == null) return null;
+            box.worldVerticesLength = vertexCount << 1;
+            box.vertices = vertices.vertices;
+            box.bones = vertices.bones;
+            return box;
+        }
+        case 2 /* Mesh */: {
+            var path = input.readString();
+            var color = input.readInt32();
+            var vertexCount = input.readInt(true);
+            var uvs = this.readFloatArray(input, vertexCount << 1, 1);
+            var triangles = this.readShortArray(input);
+            var vertices = this.readVertices(input, vertexCount);
+            var hullLength = input.readInt(true);
+            var edges = null, width = 0, height = 0;
+            if (nonessential) {
+                edges = this.readShortArray(input);
+                width = input.readFloat();
+                height = input.readFloat();
+            }
+            if (path == null) path = name;
+            var mesh = this.attachmentLoader.newMeshAttachment(skin, name, path);
+            if (mesh == null) return null;
+            mesh.path = path;
+            rgba8888ToColor(mesh.color, color);
+            mesh.bones = vertices.bones;
+            mesh.vertices = vertices.vertices;
+            mesh.worldVerticesLength = vertexCount << 1;
+            mesh.triangles = triangles;
+            mesh.regionUVs = uvs;
+            mesh.updateUVs();
+            mesh.hullLength = hullLength << 1;
+            if (nonessential) {
+                mesh.edges = edges;
+                mesh.width = width * scale;
+                mesh.height = height * scale;
+            }
+            return mesh;
+        }
+        case 3 /* LinkedMesh */: {
+            var path = input.readString();
+            var color = input.readInt32();
+            var skinName = input.readString();
+            var parent = input.readString();
+            var inheritDeform = input.readBoolean();
+            var width = 0, height = 0;
+            if (nonessential) { width = input.readFloat(); height = input.readFloat(); }
+            if (path == null) path = name;
+            var mesh = this.attachmentLoader.newMeshAttachment(skin, name, path);
+            if (mesh == null) return null;
+            mesh.path = path;
+            rgba8888ToColor(mesh.color, color);
+            mesh.inheritDeform = inheritDeform;
+            if (nonessential) { mesh.width = width * scale; mesh.height = height * scale; }
+            this.linkedMeshes.push({ mesh: mesh, skin: skinName, slotIndex: slotIndex, parent: parent });
+            return mesh;
+        }
+        case 4 /* Path */: {
+            var closed = input.readBoolean();
+            var constantSpeed = input.readBoolean();
+            var vertexCount = input.readInt(true);
+            var vertices = this.readVertices(input, vertexCount);
+            var lengths = new Array(vertexCount / 3);
+            for (var i = 0; i < lengths.length; i++)
+                lengths[i] = input.readFloat() * scale;
+            if (nonessential) input.readInt32(); // color
+            var pathAtt = this.attachmentLoader.newPathAttachment(skin, name);
+            if (pathAtt == null) return null;
+            pathAtt.closed = closed;
+            pathAtt.constantSpeed = constantSpeed;
+            pathAtt.worldVerticesLength = vertexCount << 1;
+            pathAtt.vertices = vertices.vertices;
+            pathAtt.bones = vertices.bones;
+            pathAtt.lengths = lengths;
+            return pathAtt;
+        }
+        case 5 /* Point */: {
+            var rotation = input.readFloat();
+            var x = input.readFloat();
+            var y = input.readFloat();
+            if (nonessential) input.readInt32(); // color
+            var point = this.attachmentLoader.newPointAttachment(skin, name);
+            if (point == null) return null;
+            point.x = x * scale;
+            point.y = y * scale;
+            point.rotation = rotation;
+            return point;
+        }
+        case 6 /* Clipping */: {
+            var endSlotIndex = input.readInt(true);
+            var vertexCount = input.readInt(true);
+            var vertices = this.readVertices(input, vertexCount);
+            if (nonessential) input.readInt32(); // color
+            var clip = this.attachmentLoader.newClippingAttachment(skin, name);
+            if (clip == null) return null;
+            clip.endSlot = skeletonData.slots[endSlotIndex];
+            clip.worldVerticesLength = vertexCount << 1;
+            clip.vertices = vertices.vertices;
+            clip.bones = vertices.bones;
+            return clip;
+        }
+        }
+        return null;
+    };
+
+    SkeletonBinary.prototype.readVertices = function(input, vertexCount) {
+        var scale = this.scale;
+        var verticesLength = vertexCount << 1;
+        if (!input.readBoolean()) {
+            return { vertices: this.readFloatArray(input, verticesLength, scale), bones: null };
+        }
+        var weights = [], bones = [];
+        for (var i = 0; i < vertexCount; i++) {
+            var boneCount = input.readInt(true);
+            bones.push(boneCount);
+            for (var ii = 0; ii < boneCount; ii++) {
+                bones.push(input.readInt(true));
+                weights.push(input.readFloat() * scale);
+                weights.push(input.readFloat() * scale);
+                weights.push(input.readFloat());
+            }
+        }
+        return { vertices: new Float32Array(weights), bones: bones };
+    };
+
+    SkeletonBinary.prototype.readFloatArray = function(input, n, scale) {
+        var array = new Float32Array(n);
+        if (scale == 1) {
+            for (var i = 0; i < n; i++) array[i] = input.readFloat();
+        } else {
+            for (var i = 0; i < n; i++) array[i] = input.readFloat() * scale;
+        }
+        return array;
+    };
+
+    SkeletonBinary.prototype.readShortArray = function(input) {
+        var n = input.readInt(true);
+        var array = new Int16Array(n);
+        for (var i = 0; i < n; i++) array[i] = input.readShort();
+        return array;
+    };
+
+    SkeletonBinary.prototype.readAnimation = function(input, name, skeletonData) {
+        var timelines = [];
+        var scale = this.scale;
+        var duration = 0;
+        var tempColor1 = new spine.Color(), tempColor2 = new spine.Color();
+
+        // Slot timelines
+        for (var i = 0, n = input.readInt(true); i < n; i++) {
+            var slotIndex = input.readInt(true);
+            for (var ii = 0, nn = input.readInt(true); ii < nn; ii++) {
+                var timelineType = input.readByte();
+                var frameCount = input.readInt(true);
+                switch (timelineType) {
+                case SLOT_ATTACHMENT: {
+                    var tl = new spine.AttachmentTimeline(frameCount);
+                    tl.slotIndex = slotIndex;
+                    for (var fi = 0; fi < frameCount; fi++)
+                        tl.setFrame(fi, input.readFloat(), input.readString());
+                    timelines.push(tl);
+                    duration = Math.max(duration, tl.frames[frameCount - 1]);
+                    break;
+                }
+                case SLOT_COLOR: {
+                    var tl = new spine.ColorTimeline(frameCount);
+                    tl.slotIndex = slotIndex;
+                    for (var fi = 0; fi < frameCount; fi++) {
+                        var time = input.readFloat();
+                        rgba8888ToColor(tempColor1, input.readInt32());
+                        tl.setFrame(fi, time, tempColor1.r, tempColor1.g, tempColor1.b, tempColor1.a);
+                        if (fi < frameCount - 1) this.readCurve(input, fi, tl);
+                    }
+                    timelines.push(tl);
+                    duration = Math.max(duration, tl.frames[(frameCount - 1) * spine.ColorTimeline.ENTRIES]);
+                    break;
+                }
+                case SLOT_TWO_COLOR: {
+                    var tl = new spine.TwoColorTimeline(frameCount);
+                    tl.slotIndex = slotIndex;
+                    for (var fi = 0; fi < frameCount; fi++) {
+                        var time = input.readFloat();
+                        rgba8888ToColor(tempColor1, input.readInt32());
+                        rgb888ToColor(tempColor2, input.readInt32());
+                        tl.setFrame(fi, time, tempColor1.r, tempColor1.g, tempColor1.b, tempColor1.a,
+                            tempColor2.r, tempColor2.g, tempColor2.b);
+                        if (fi < frameCount - 1) this.readCurve(input, fi, tl);
+                    }
+                    timelines.push(tl);
+                    duration = Math.max(duration, tl.frames[(frameCount - 1) * spine.TwoColorTimeline.ENTRIES]);
+                    break;
+                }
+                }
+            }
+        }
+
+        // Bone timelines
+        for (var i = 0, n = input.readInt(true); i < n; i++) {
+            var boneIndex = input.readInt(true);
+            for (var ii = 0, nn = input.readInt(true); ii < nn; ii++) {
+                var timelineType = input.readByte();
+                var frameCount = input.readInt(true);
+                switch (timelineType) {
+                case BONE_ROTATE: {
+                    var tl = new spine.RotateTimeline(frameCount);
+                    tl.boneIndex = boneIndex;
+                    for (var fi = 0; fi < frameCount; fi++) {
+                        tl.setFrame(fi, input.readFloat(), input.readFloat());
+                        if (fi < frameCount - 1) this.readCurve(input, fi, tl);
+                    }
+                    timelines.push(tl);
+                    duration = Math.max(duration, tl.frames[(frameCount - 1) * spine.RotateTimeline.ENTRIES]);
+                    break;
+                }
+                case BONE_TRANSLATE:
+                case BONE_SCALE:
+                case BONE_SHEAR: {
+                    var tl, timelineScale = 1;
+                    if (timelineType == BONE_SCALE) tl = new spine.ScaleTimeline(frameCount);
+                    else if (timelineType == BONE_SHEAR) tl = new spine.ShearTimeline(frameCount);
+                    else { tl = new spine.TranslateTimeline(frameCount); timelineScale = scale; }
+                    tl.boneIndex = boneIndex;
+                    for (var fi = 0; fi < frameCount; fi++) {
+                        tl.setFrame(fi, input.readFloat(), input.readFloat() * timelineScale, input.readFloat() * timelineScale);
+                        if (fi < frameCount - 1) this.readCurve(input, fi, tl);
+                    }
+                    timelines.push(tl);
+                    duration = Math.max(duration, tl.frames[(frameCount - 1) * spine.TranslateTimeline.ENTRIES]);
+                    break;
+                }
+                }
+            }
+        }
+
+        // IK constraint timelines
+        for (var i = 0, n = input.readInt(true); i < n; i++) {
+            var index = input.readInt(true);
+            var frameCount = input.readInt(true);
+            var tl = new spine.IkConstraintTimeline(frameCount);
+            tl.ikConstraintIndex = index;
+            for (var fi = 0; fi < frameCount; fi++) {
+                tl.setFrame(fi, input.readFloat(), input.readFloat(), input.readByte());
+                if (fi < frameCount - 1) this.readCurve(input, fi, tl);
+            }
+            timelines.push(tl);
+            duration = Math.max(duration, tl.frames[(frameCount - 1) * spine.IkConstraintTimeline.ENTRIES]);
+        }
+
+        // Transform constraint timelines
+        for (var i = 0, n = input.readInt(true); i < n; i++) {
+            var index = input.readInt(true);
+            var frameCount = input.readInt(true);
+            var tl = new spine.TransformConstraintTimeline(frameCount);
+            tl.transformConstraintIndex = index;
+            for (var fi = 0; fi < frameCount; fi++) {
+                tl.setFrame(fi, input.readFloat(), input.readFloat(), input.readFloat(), input.readFloat(), input.readFloat());
+                if (fi < frameCount - 1) this.readCurve(input, fi, tl);
+            }
+            timelines.push(tl);
+            duration = Math.max(duration, tl.frames[(frameCount - 1) * spine.TransformConstraintTimeline.ENTRIES]);
+        }
+
+        // Path constraint timelines
+        for (var i = 0, n = input.readInt(true); i < n; i++) {
+            var index = input.readInt(true);
+            var pathData = skeletonData.pathConstraints[index];
+            for (var ii = 0, nn = input.readInt(true); ii < nn; ii++) {
+                var timelineType = input.readByte();
+                var frameCount = input.readInt(true);
+                switch (timelineType) {
+                case PATH_POSITION:
+                case PATH_SPACING: {
+                    var tl, timelineScale = 1;
+                    if (timelineType == PATH_SPACING) {
+                        tl = new spine.PathConstraintSpacingTimeline(frameCount);
+                        if (pathData.spacingMode == spine.SpacingMode.Length || pathData.spacingMode == spine.SpacingMode.Fixed)
+                            timelineScale = scale;
+                    } else {
+                        tl = new spine.PathConstraintPositionTimeline(frameCount);
+                        if (pathData.positionMode == spine.PositionMode.Fixed) timelineScale = scale;
+                    }
+                    tl.pathConstraintIndex = index;
+                    for (var fi = 0; fi < frameCount; fi++) {
+                        tl.setFrame(fi, input.readFloat(), input.readFloat() * timelineScale);
+                        if (fi < frameCount - 1) this.readCurve(input, fi, tl);
+                    }
+                    timelines.push(tl);
+                    duration = Math.max(duration, tl.frames[(frameCount - 1) * spine.PathConstraintPositionTimeline.ENTRIES]);
+                    break;
+                }
+                case PATH_MIX: {
+                    var tl = new spine.PathConstraintMixTimeline(frameCount);
+                    tl.pathConstraintIndex = index;
+                    for (var fi = 0; fi < frameCount; fi++) {
+                        tl.setFrame(fi, input.readFloat(), input.readFloat(), input.readFloat());
+                        if (fi < frameCount - 1) this.readCurve(input, fi, tl);
+                    }
+                    timelines.push(tl);
+                    duration = Math.max(duration, tl.frames[(frameCount - 1) * spine.PathConstraintMixTimeline.ENTRIES]);
+                    break;
+                }
+                }
+            }
+        }
+
+        // Deform timelines
+        for (var i = 0, n = input.readInt(true); i < n; i++) {
+            var skin = skeletonData.skins[input.readInt(true)];
+            for (var ii = 0, nn = input.readInt(true); ii < nn; ii++) {
+                var slotIndex = input.readInt(true);
+                for (var iii = 0, nnn = input.readInt(true); iii < nnn; iii++) {
+                    var attachment = skin.getAttachment(slotIndex, input.readString());
+                    var weighted = attachment.bones != null;
+                    var vertices = attachment.vertices;
+                    var deformLength = weighted ? vertices.length / 3 * 2 : vertices.length;
+
+                    var frameCount = input.readInt(true);
+                    var tl = new spine.DeformTimeline(frameCount);
+                    tl.slotIndex = slotIndex;
+                    tl.attachment = attachment;
+
+                    for (var fi = 0; fi < frameCount; fi++) {
+                        var time = input.readFloat();
+                        var deform;
+                        var end = input.readInt(true);
+                        if (end == 0) {
+                            deform = weighted ? new Float32Array(deformLength) : vertices;
+                        } else {
+                            deform = new Float32Array(deformLength);
+                            var start = input.readInt(true);
+                            end += start;
+                            if (scale == 1) {
+                                for (var v = start; v < end; v++) deform[v] = input.readFloat();
+                            } else {
+                                for (var v = start; v < end; v++) deform[v] = input.readFloat() * scale;
+                            }
+                            if (!weighted) {
+                                for (var v = 0; v < deform.length; v++) deform[v] += vertices[v];
+                            }
+                        }
+                        tl.setFrame(fi, time, deform);
+                        if (fi < frameCount - 1) this.readCurve(input, fi, tl);
+                    }
+                    timelines.push(tl);
+                    duration = Math.max(duration, tl.frames[frameCount - 1]);
+                }
+            }
+        }
+
+        // Draw order timeline
+        var drawOrderCount = input.readInt(true);
+        if (drawOrderCount > 0) {
+            var tl = new spine.DrawOrderTimeline(drawOrderCount);
+            var slotCount = skeletonData.slots.length;
+            for (var i = 0; i < drawOrderCount; i++) {
+                var time = input.readFloat();
+                var offsetCount = input.readInt(true);
+                var drawOrder = new Array(slotCount);
+                for (var ii = slotCount - 1; ii >= 0; ii--) drawOrder[ii] = -1;
+                var unchanged = new Array(slotCount - offsetCount);
+                var originalIndex = 0, unchangedIndex = 0;
+                for (var ii = 0; ii < offsetCount; ii++) {
+                    var slotIndex = input.readInt(true);
+                    while (originalIndex != slotIndex) unchanged[unchangedIndex++] = originalIndex++;
+                    drawOrder[originalIndex + input.readInt(true)] = originalIndex++;
+                }
+                while (originalIndex < slotCount) unchanged[unchangedIndex++] = originalIndex++;
+                for (var ii = slotCount - 1; ii >= 0; ii--)
+                    if (drawOrder[ii] == -1) drawOrder[ii] = unchanged[--unchangedIndex];
+                tl.setFrame(i, time, drawOrder);
+            }
+            timelines.push(tl);
+            duration = Math.max(duration, tl.frames[drawOrderCount - 1]);
+        }
+
+        // Event timeline
+        var eventCount = input.readInt(true);
+        if (eventCount > 0) {
+            var tl = new spine.EventTimeline(eventCount);
+            for (var i = 0; i < eventCount; i++) {
+                var time = input.readFloat();
+                var eventData = skeletonData.events[input.readInt(true)];
+                var event = new spine.Event(time, eventData);
+                event.intValue = input.readInt(false);
+                event.floatValue = input.readFloat();
+                event.stringValue = input.readBoolean() ? input.readString() : eventData.stringValue;
+                tl.setFrame(i, event);
+            }
+            timelines.push(tl);
+            duration = Math.max(duration, tl.frames[eventCount - 1]);
+        }
+
+        skeletonData.animations.push(new spine.Animation(name, timelines, duration));
+    };
+
+    SkeletonBinary.prototype.readCurve = function(input, frameIndex, timeline) {
+        switch (input.readByte()) {
+        case CURVE_STEPPED:
+            timeline.setStepped(frameIndex);
+            break;
+        case CURVE_BEZIER:
+            timeline.setCurve(frameIndex, input.readFloat(), input.readFloat(), input.readFloat(), input.readFloat());
+            break;
+        }
+    };
+
+    spine.SkeletonBinary = SkeletonBinary;
+    console.log('[SpineExporter] 已注入 SkeletonBinary 补丁 (从 Java 3.6 运行时移植)');
+}
+
+// ==================== 初始化 WebGL ====================
+function initWebGL() {
+    var canvas = document.getElementById('spineCanvas');
+    var config = { alpha: true, premultipliedAlpha: false, preserveDrawingBuffer: true };
+
+    // 检测是否为 4.x 运行时 (4.x 没有 spine.webgl 子命名空间)
+    is4x = !spine.webgl;
+
+    if (is4x) {
+        // Spine 4.x: 使用 ManagedWebGLRenderingContext
+        spineCtx = new spine.ManagedWebGLRenderingContext(canvas, config);
+        gl = spineCtx.gl;
+        gl.enable(gl.BLEND);
+        shader = spine.Shader.newTwoColoredTextured(spineCtx);
+        batcher = new spine.PolygonBatcher(spineCtx);
+        mvp = new spine.Matrix4();
+        skeletonRenderer = new spine.SkeletonRenderer(spineCtx);
+    } else {
+        // Spine 3.x: 使用原始 WebGL 上下文
+        gl = canvas.getContext('webgl', config) || canvas.getContext('experimental-webgl', config);
+        spineCtx = gl;
+        if (!gl) {
+            alert('WebGL 不可用，请使用支持 WebGL 的浏览器。');
+            return false;
+        }
+        gl.enable(gl.BLEND);
+        shader = spine.webgl.Shader.newTwoColoredTextured(gl);
+        batcher = new spine.webgl.PolygonBatcher(gl);
+        mvp = new spine.webgl.Matrix4();
+        skeletonRenderer = new spine.webgl.SkeletonRenderer(gl);
+    }
+    return true;
+}
+
+// ==================== 文件加载 ====================
+document.getElementById('folderInput').addEventListener('change', function(e) {
+    handleFiles(e.target.files);
+});
+
+var dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+});
+dropZone.addEventListener('dragleave', function() {
+    dropZone.classList.remove('drag-over');
+});
+dropZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.items) {
+        var items = e.dataTransfer.items;
+        for (var i = 0; i < items.length; i++) {
+            var entry = items[i].webkitGetAsEntry();
+            if (entry && entry.isDirectory) {
+                readDirectory(entry);
+                return;
+            }
+        }
+    }
+    handleFiles(e.dataTransfer.files);
+});
+
+function readDirectory(dirEntry) {
+    var allFiles = [];
+
+    // 读取单个目录的所有条目（readEntries 可能分批返回）
+    function readAllEntries(dir) {
+        return new Promise(function(resolve) {
+            var reader = dir.createReader();
+            var batch = [];
+            function read() {
+                reader.readEntries(function(entries) {
+                    if (!entries.length) { resolve(batch); return; }
+                    batch = batch.concat(Array.from(entries));
+                    read();
+                });
+            }
+            read();
+        });
+    }
+
+    // 递归扫描目录树
+    function scan(dir) {
+        return readAllEntries(dir).then(function(entries) {
+            var subDirs = [];
+            for (var i = 0; i < entries.length; i++) {
+                if (entries[i].isFile) {
+                    allFiles.push(entries[i]);
+                } else if (entries[i].isDirectory) {
+                    subDirs.push(scan(entries[i]));
+                }
+            }
+            return Promise.all(subDirs);
+        });
+    }
+
+    scan(dirEntry).then(function() {
+        processFileEntries(allFiles);
+    });
+}
+
+function processFileEntries(entries) {
+    if (entries.length === 0) { handleFiles([]); return; }
+    var files = [];
+    var count = 0;
+    for (var idx = 0; idx < entries.length; idx++) {
+        entries[idx].file(function(file) {
+            files.push(file);
+            count++;
+            if (count === entries.length) {
+                handleFiles(files);
+            }
+        });
+    }
+}
+
+async function handleFiles(fileList) {
+    var files = Array.from(fileList);
+    loadedFiles = {};
+    animBoundsCache = {};
+
+    var skelFile = null, atlasFile = null;
+    var pngFiles = {};
+
+    for (var i = 0; i < files.length; i++) {
+        var file = files[i];
+        var name = file.name || file.webkitRelativePath.split('/').pop();
+        var nameLower = name.toLowerCase();
+        if (nameLower.endsWith('.skel') || nameLower.endsWith('.skel.bytes')) {
+            skelFile = file;
+            loadedFiles.skelName = name;
+        } else if (nameLower.endsWith('.json') && !skelFile) {
+            skelFile = file;
+            loadedFiles.skelName = name;
+        } else if (nameLower.endsWith('.atlas') || nameLower.endsWith('.atlas.txt')) {
+            atlasFile = file;
+            loadedFiles.atlasName = name;
+        } else if (nameLower.endsWith('.png')) {
+            pngFiles[name] = file;
+        }
+    }
+
+    if (!skelFile || !atlasFile) {
+        alert('未找到 .skel (或 .json) 和 .atlas 文件，请选择正确的文件夹。');
+        return;
+    }
+
+    setStatus('正在加载文件...');
+
+    try {
+        // 读取 atlas 文本
+        var atlasText = await readFileAsText(atlasFile);
+        // 读取 skel 数据
+        var skelBinary = await readFileAsArrayBuffer(skelFile);
+
+        // 检测 Spine 版本
+        var versionInfo = detectSpineVersion(skelBinary);
+        isJsonSkel = versionInfo.isJson;
+
+        if (!versionInfo.version) {
+            throw new Error('无法检测 Spine 版本，文件可能已损坏。');
+        }
+
+        var runtimeInfo = getRuntimeInfo(versionInfo.version);
+        if (!runtimeInfo) {
+            throw new Error('不支持的 Spine 版本: ' + versionInfo.version);
+        }
+
+        setStatus('检测到 Spine ' + versionInfo.version + '，正在加载运行时...');
+        document.getElementById('versionBadge').textContent = '检测到 Spine ' + versionInfo.version;
+
+        // 如果运行时版本变化，重新加载
+        if (currentRuntimeVersion !== runtimeInfo.runtimeBranch) {
+            await loadSpineRuntime(runtimeInfo.url);
+            currentRuntimeVersion = runtimeInfo.runtimeBranch;
+            // 为 3.5/3.6/3.7 注入 SkeletonBinary 补丁
+            injectSkeletonBinary();
+            // 重新初始化 WebGL (运行时 API 可能不同)
+            gl = null;
+            spineCtx = null;
+        }
+
+        setStatus('正在解析资源...');
+
+        // 解析 atlas 引用的 PNG 文件名
+        var referencedPngs = parseAtlasPageNames(atlasText);
+
+        // 加载 PNG 图片
+        var images = {};
+        for (var j = 0; j < referencedPngs.length; j++) {
+            var pngName = referencedPngs[j];
+            if (pngFiles[pngName]) {
+                images[pngName] = await loadImageFromFile(pngFiles[pngName]);
+            } else {
+                console.warn('Atlas 引用的图片未找到: ' + pngName + '，尝试模糊匹配...');
+                // 尝试不区分大小写匹配
+                var matched = false;
+                var pngKeys = Object.keys(pngFiles);
+                for (var k = 0; k < pngKeys.length; k++) {
+                    if (pngKeys[k].toLowerCase() === pngName.toLowerCase()) {
+                        images[pngName] = await loadImageFromFile(pngFiles[pngKeys[k]]);
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) {
+                    console.warn('图片确实未找到: ' + pngName);
+                }
+            }
+        }
+
+        loadedFiles.images = images;
+        loadedFiles.atlasText = atlasText;
+        loadedFiles.skelBinary = skelBinary;
+        loadedFiles.pngFiles = pngFiles;
+
+        // 初始化 spine
+        initSpine(atlasText, skelBinary, images);
+
+    } catch (err) {
+        alert('加载失败: ' + err.message);
+        console.error(err);
+        setStatus('加载失败');
+    }
+}
+
+function parseAtlasPageNames(atlasText) {
+    var names = [];
+    var lines = atlasText.split(/\r?\n/);
+    var expectPage = true;
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (line.length === 0) {
+            expectPage = true;
+            continue;
+        }
+        if (expectPage && !line.includes(':')) {
+            if (line.endsWith('.png') || line.endsWith('.jpg') || line.endsWith('.jpeg')) {
+                names.push(line);
+            }
+            expectPage = false;
+        }
+    }
+    return names;
+}
+
+function readFileAsText(file) {
+    return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function() { resolve(reader.result); };
+        reader.onerror = reject;
+        reader.readAsText(file);
+    });
+}
+
+function readFileAsArrayBuffer(file) {
+    return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function() { resolve(reader.result); };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+function loadImageFromFile(file) {
+    return new Promise(function(resolve, reject) {
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function() { resolve(img); };
+        img.onerror = reject;
+        img.src = url;
+    });
+}
+
+// ==================== Spine 初始化 ====================
+function initSpine(atlasText, skelBinary, images) {
+    if (!gl && !initWebGL()) return;
+
+    // 清理之前的资源
+    if (skeleton) {
+        try { skeleton = null; } catch(e) {}
+    }
+
+    // 创建 TextureAtlas
+    var GLTextureClass = is4x ? spine.GLTexture : spine.webgl.GLTexture;
+    var textureLoader = function(pageName) {
+        var img = images[pageName];
+        if (!img) {
+            throw new Error('纹理图片未找到: ' + pageName);
+        }
+        return new GLTextureClass(spineCtx, img);
+    };
+
+    var atlas;
+    if (is4x && typeof spine.TextureAtlas.prototype.addSpineAtlas === 'function') {
+        // Spine 4.1+ : 构造函数不再接受回调，使用 addSpineAtlas
+        atlas = new spine.TextureAtlas();
+        atlas.addSpineAtlas(atlasText, textureLoader);
+    } else {
+        // Spine 3.x 及 4.0 : 构造函数接受 (atlasText, callback)
+        atlas = new spine.TextureAtlas(atlasText, textureLoader);
+    }
+
+    // 创建骨骼
+    var atlasLoader = new spine.AtlasAttachmentLoader(atlas);
+
+    var scaleVal = parseFloat(document.getElementById('scaleInput').value) || 1;
+
+    if (isJsonSkel) {
+        // JSON 骨骼数据
+        var skeletonJsonReader = new spine.SkeletonJson(atlasLoader);
+        skeletonJsonReader.scale = scaleVal;
+        var jsonText = new TextDecoder().decode(new Uint8Array(skelBinary));
+        skeletonData = skeletonJsonReader.readSkeletonData(jsonText);
+    } else {
+        // 二进制骨骼数据
+        if (typeof spine.SkeletonBinary !== 'function') {
+            throw new Error('当前 Spine 运行时 (' + currentRuntimeVersion + ') 不支持二进制 .skel 格式。\n' +
+                'Spine 3.5/3.6/3.7 的 JS 运行时仅支持 JSON 格式。\n' +
+                '请在 Spine 编辑器中将骨骼导出为 .json 格式后重试。');
+        }
+        var skeletonBinaryReader = new spine.SkeletonBinary(atlasLoader);
+        skeletonBinaryReader.scale = scaleVal;
+        skeletonData = skeletonBinaryReader.readSkeletonData(new Uint8Array(skelBinary));
+    }
+
+    skeleton = new spine.Skeleton(skeletonData);
+
+    // 设置默认皮肤
+    if (skeletonData.defaultSkin) {
+        skeleton.setSkin(skeletonData.defaultSkin);
+    }
+    skeleton.setToSetupPose();
+
+    // 计算边界
+    bounds = calculateBounds(skeleton);
+
+    // 动画状态
+    animationStateData = new spine.AnimationStateData(skeletonData);
+    animationStateData.defaultMix = 0;
+    animationState = new spine.AnimationState(animationStateData);
+
+    // 填充皮肤列表
+    populateSkinList();
+    // 填充动画列表
+    populateAnimationList();
+
+    // 显示面板
+    document.getElementById('skinPanel').style.display = '';
+    document.getElementById('animPanel').style.display = '';
+    document.getElementById('settingsPanel').style.display = '';
+    document.getElementById('exportPanel').style.display = '';
+
+    // 显示文件信息
+    var fileInfo = document.getElementById('fileInfo');
+    fileInfo.style.display = '';
+    fileInfo.textContent = '已加载: ' + loadedFiles.skelName + ' (' + skeletonData.animations.length + ' 个动画, ' + skeletonData.skins.length + ' 个皮肤)';
+
+    // 自动适配
+    autoFit();
+
+    // 播放第一个动画
+    if (skeletonData.animations.length > 0) {
+        selectAnimation(skeletonData.animations[0].name);
+    }
+
+    setStatus('加载完成');
+}
+
+function calculateBounds(skel) {
+    skel.setToSetupPose();
+    skel.updateWorldTransform();
+    var offset = new spine.Vector2();
+    var size = new spine.Vector2();
+    skel.getBounds(offset, size, []);
+    return { offset: offset, size: size };
+}
+
+function calculateAnimationBounds(animNames) {
+    if (typeof animNames === 'string') animNames = [animNames];
+    if (!skeleton || !skeletonData || animNames.length === 0) return bounds;
+
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    var offset = new spine.Vector2();
+    var size = new spine.Vector2();
+    var sampleFps = 30;
+
+    var tempStateData = new spine.AnimationStateData(skeletonData);
+    tempStateData.defaultMix = 0;
+    var tempState = new spine.AnimationState(tempStateData);
+
+    for (var a = 0; a < animNames.length; a++) {
+        var anim = skeletonData.findAnimation(animNames[a]);
+        if (!anim) continue;
+
+        var duration = anim.duration;
+        var totalFrames = Math.max(1, Math.ceil(duration * sampleFps));
+        var dt = duration > 0 ? duration / totalFrames : 0;
+
+        skeleton.setToSetupPose();
+        tempState.clearTracks();
+        tempState.setAnimation(0, animNames[a], false);
+
+        for (var i = 0; i <= totalFrames; i++) {
+            tempState.update(i === 0 ? 0 : dt);
+            tempState.apply(skeleton);
+            skeleton.updateWorldTransform();
+            skeleton.getBounds(offset, size, []);
+
+            var x1 = offset.x, y1 = offset.y;
+            var x2 = offset.x + size.x, y2 = offset.y + size.y;
+            if (x1 < minX) minX = x1;
+            if (y1 < minY) minY = y1;
+            if (x2 > maxX) maxX = x2;
+            if (y2 > maxY) maxY = y2;
+        }
+    }
+
+    // 恢复当前动画状态
+    skeleton.setToSetupPose();
+    if (currentAnimName) {
+        animationState.setAnimation(0, currentAnimName, document.getElementById('loopCheck').checked);
+        animationState.update(0);
+        animationState.apply(skeleton);
+        skeleton.updateWorldTransform();
+    }
+
+    if (minX === Infinity) return bounds;
+    return {
+        offset: { x: minX, y: minY },
+        size: { x: maxX - minX, y: maxY - minY }
+    };
+}
+
+function populateSkinList() {
+    var list = document.getElementById('skinList');
+    list.innerHTML = '';
+    var skins = skeletonData.skins;
+
+    document.getElementById('skinCount').textContent = skins.length;
+    document.getElementById('skinPanel').style.display = '';
+
+    // 多皮肤时显示全选/取消全选按钮
+    document.getElementById('skinControls').style.display = skins.length > 1 ? '' : 'none';
+
+    for (var i = 0; i < skins.length; i++) {
+        (function(skin, index) {
+            var div = document.createElement('div');
+            div.className = 'skin-item';
+
+            var checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = 'skin_' + index;
+            checkbox.dataset.skinName = skin.name;
+            // 默认勾选 default 皮肤；若无 default 皮肤则勾选第一个
+            checkbox.checked = skeletonData.defaultSkin
+                ? (skin === skeletonData.defaultSkin)
+                : (index === 0);
+            checkbox.onchange = function() { applySkins(); };
+
+            var label = document.createElement('label');
+            label.htmlFor = 'skin_' + index;
+            label.textContent = skin.name;
+
+            div.appendChild(checkbox);
+            div.appendChild(label);
+            list.appendChild(div);
+        })(skins[i], i);
+    }
+}
+
+function toggleAllSkins(checked) {
+    var checkboxes = document.querySelectorAll('#skinList input[type="checkbox"]');
+    for (var i = 0; i < checkboxes.length; i++) {
+        checkboxes[i].checked = checked;
+    }
+    applySkins();
+}
+
+function applySkins() {
+    if (!skeleton || !skeletonData) return;
+
+    var checkboxes = document.querySelectorAll('#skinList input[type="checkbox"]');
+    var selectedSkins = [];
+    for (var i = 0; i < checkboxes.length; i++) {
+        if (checkboxes[i].checked) {
+            var skin = skeletonData.findSkin(checkboxes[i].dataset.skinName);
+            if (skin) selectedSkins.push(skin);
+        }
+    }
+
+    if (selectedSkins.length === 0) {
+        // 无选中时清空皮肤
+        skeleton.setSkin(null);
+    } else if (selectedSkins.length === 1) {
+        skeleton.setSkin(selectedSkins[0]);
+    } else {
+        // 组合多个皮肤
+        var combined = new spine.Skin('combined');
+        for (var i = 0; i < selectedSkins.length; i++) {
+            if (typeof combined.addSkin === 'function') {
+                // Spine 3.8+ / 4.x
+                combined.addSkin(selectedSkins[i]);
+            } else {
+                // Spine 3.6/3.7 手动复制附件
+                var srcSkin = selectedSkins[i];
+                if (srcSkin.attachments) {
+                    for (var slotIdx = 0; slotIdx < srcSkin.attachments.length; slotIdx++) {
+                        var slotAttachments = srcSkin.attachments[slotIdx];
+                        if (slotAttachments) {
+                            for (var name in slotAttachments) {
+                                if (slotAttachments.hasOwnProperty(name)) {
+                                    combined.addAttachment(slotIdx, name, slotAttachments[name]);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        skeleton.setSkin(combined);
+    }
+
+    skeleton.setSlotsToSetupPose();
+    animBoundsCache = {};
+
+    // 如果有正在播放的动画，重新计算动画边界，避免裁剪
+    if (currentAnimName) {
+        animBoundsCache[currentAnimName] = calculateAnimationBounds(currentAnimName);
+        bounds = animBoundsCache[currentAnimName];
+    } else {
+        bounds = calculateBounds(skeleton);
+    }
+    renderFrame();
+}
+
+function populateAnimationList() {
+    var list = document.getElementById('animList');
+    list.innerHTML = '';
+    var anims = skeletonData.animations;
+    document.getElementById('animCount').textContent = anims.length;
+
+    for (var i = 0; i < anims.length; i++) {
+        (function(anim) {
+            var div = document.createElement('div');
+            div.className = 'animation-item';
+            div.innerHTML = '<span>' + anim.name + '</span><span class="duration">' + anim.duration.toFixed(2) + 's</span>';
+            div.onclick = function() { selectAnimation(anim.name); };
+            div.dataset.name = anim.name;
+            list.appendChild(div);
+        })(anims[i]);
+    }
+}
+
+function selectAnimation(name) {
+    currentAnimName = name;
+    var loop = document.getElementById('loopCheck').checked;
+
+    // 自动计算动画边界（带缓存），防止裁剪
+    if (!animBoundsCache[name]) {
+        animBoundsCache[name] = calculateAnimationBounds(name);
+    }
+    bounds = animBoundsCache[name];
+
+    skeleton.setToSetupPose();
+    animationState.setAnimation(0, name, loop);
+    animationState.apply(skeleton);
+    skeleton.updateWorldTransform();
+
+    // 更新 UI
+    var items = document.querySelectorAll('.animation-item');
+    for (var i = 0; i < items.length; i++) {
+        items[i].classList.toggle('active', items[i].dataset.name === name);
+    }
+
+    // 更新导出前缀
+    var baseName = loadedFiles.skelName ? loadedFiles.skelName.replace(/\.(skel|skel\.bytes|json)$/i, '') : 'spine';
+    document.getElementById('prefixInput').value = baseName + '_' + name;
+
+    if (!isPlaying) {
+        playAnim();
+    }
+
+    updateStatusRight();
+}
+
+// ==================== 播放控制 ====================
+function playAnim() {
+    if (!skeleton || !animationState) return;
+    isPlaying = true;
+    lastFrameTime = Date.now() / 1000;
+    if (animFrameId) cancelAnimationFrame(animFrameId);
+    animLoop();
+}
+
+function pauseAnim() {
+    isPlaying = false;
+    if (animFrameId) {
+        cancelAnimationFrame(animFrameId);
+        animFrameId = null;
+    }
+}
+
+function stopAnim() {
+    pauseAnim();
+    if (skeleton && animationState) {
+        skeleton.setToSetupPose();
+        if (currentAnimName) {
+            animationState.setAnimation(0, currentAnimName, document.getElementById('loopCheck').checked);
+            animationState.update(0);
+            animationState.apply(skeleton);
+            skeleton.updateWorldTransform();
+        }
+        renderFrame();
+    }
+}
+
+function animLoop() {
+    if (!isPlaying || isExporting) return;
+    var now = Date.now() / 1000;
+    var delta = now - lastFrameTime;
+    lastFrameTime = now;
+
+    animationState.update(delta);
+    animationState.apply(skeleton);
+    skeleton.updateWorldTransform();
+    renderFrame();
+
+    animFrameId = requestAnimationFrame(animLoop);
+}
+
+// ==================== 渲染 ====================
+function renderFrame() {
+    if (!gl || !skeleton) return;
+    var canvas = document.getElementById('spineCanvas');
+
+    var transparent = document.getElementById('transparentBg').checked;
+
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    if (transparent) {
+        gl.clearColor(0, 0, 0, 0);
+    } else {
+        gl.clearColor(0.2, 0.2, 0.2, 1);
+    }
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    // 设置混合模式
+    var pma = document.getElementById('premultiplied').checked;
+    if (pma) {
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    } else {
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    }
+
+    // 设置投影矩阵
+    var offsetX = parseFloat(document.getElementById('offsetX').value) || 0;
+    var offsetY = parseFloat(document.getElementById('offsetY').value) || 0;
+
+    var centerX = bounds.offset.x + bounds.size.x / 2 + offsetX;
+    var centerY = bounds.offset.y + bounds.size.y / 2 + offsetY;
+    var scaleX = bounds.size.x / canvas.width;
+    var scaleY = bounds.size.y / canvas.height;
+    var scale = Math.max(scaleX, scaleY) * 1.2;
+    if (scale < 0.01) scale = 1;
+    var width = canvas.width * scale;
+    var height = canvas.height * scale;
+
+    mvp.ortho2d(centerX - width / 2, centerY - height / 2, width, height);
+
+    var ShaderClass = is4x ? spine.Shader : spine.webgl.Shader;
+
+    shader.bind();
+    shader.setUniformi(ShaderClass.SAMPLER, 0);
+    shader.setUniform4x4f(ShaderClass.MVP_MATRIX, mvp.values);
+
+    batcher.begin(shader);
+    skeletonRenderer.premultipliedAlpha = pma;
+    skeletonRenderer.draw(batcher, skeleton);
+    batcher.end();
+
+    shader.unbind();
+}
+
+// ==================== 设置 ====================
+function applySettings() {
+    if (!loadedFiles.atlasText) return;
+
+    var canvas = document.getElementById('spineCanvas');
+    canvas.width = parseInt(document.getElementById('canvasWidth').value) || 512;
+    canvas.height = parseInt(document.getElementById('canvasHeight').value) || 512;
+
+    syncExportSizeFields();
+    // 重新加载以应用新缩放
+    initSpine(loadedFiles.atlasText, loadedFiles.skelBinary, loadedFiles.images);
+}
+
+function autoFit() {
+    if (!bounds || !skeleton) return;
+    applyBoundsToCanvas(bounds, '姿势适配');
+}
+
+function autoFitAnimation() {
+    if (!skeleton || !skeletonData) return;
+    if (!currentAnimName) {
+        autoFit();
+        return;
+    }
+    setStatus('正在计算动画范围...');
+    setTimeout(function() {
+        var animBounds = calculateAnimationBounds(currentAnimName);
+        bounds = animBounds;
+        applyBoundsToCanvas(animBounds, '动画适配 (' + currentAnimName + ')');
+    }, 10);
+}
+
+function applyBoundsToCanvas(b, label) {
+    var padding = 1.1;
+    var w = Math.ceil(b.size.x * padding);
+    var h = Math.ceil(b.size.y * padding);
+
+    // 对齐到 2 的倍数
+    var alignedW = Math.ceil(w / 2) * 2;
+    var alignedH = Math.ceil(h / 2) * 2;
+
+    document.getElementById('canvasWidth').value = alignedW;
+    document.getElementById('canvasHeight').value = alignedH;
+    document.getElementById('offsetX').value = 0;
+    document.getElementById('offsetY').value = 0;
+
+    var canvas = document.getElementById('spineCanvas');
+    canvas.width = alignedW;
+    canvas.height = alignedH;
+
+    syncExportSizeFields();
+    renderFrame();
+    setStatus(label + ': ' + alignedW + ' x ' + alignedH);
+}
+
+// ==================== 导出功能 ====================
+async function exportCurrentAnimation() {
+    if (!skeleton || !animationState || !currentAnimName) {
+        alert('请先选择一个动画');
+        return;
+    }
+
+    isExporting = true;
+    pauseAnim();
+    setExportButtonsDisabled(true);
+
+    try {
+        var frames = await captureAnimationFrames(currentAnimName);
+        var prefix = document.getElementById('prefixInput').value || currentAnimName;
+        await downloadFramesAsZip(frames, prefix);
+        setStatus('导出完成: ' + currentAnimName + ' (' + frames.length + ' 帧)');
+    } catch (err) {
+        alert('导出失败: ' + err.message);
+        console.error(err);
+    } finally {
+        isExporting = false;
+        setExportButtonsDisabled(false);
+        hideProgress();
+    }
+}
+
+async function exportAllAnimations() {
+    if (!skeletonData) {
+        alert('请先加载 Spine 文件');
+        return;
+    }
+
+    isExporting = true;
+    pauseAnim();
+    setExportButtonsDisabled(true);
+    var batchStatus = document.getElementById('batchStatus');
+
+    try {
+        var zip = new JSZip();
+        var baseName = loadedFiles.skelName ? loadedFiles.skelName.replace(/\.(skel|skel\.bytes|json)$/i, '') : 'spine';
+        var anims = skeletonData.animations;
+
+        for (var i = 0; i < anims.length; i++) {
+            var anim = anims[i];
+            batchStatus.textContent = '导出中: ' + anim.name + ' (' + (i + 1) + '/' + anims.length + ')';
+
+            var frames = await captureAnimationFrames(anim.name);
+            var folder = zip.folder(anim.name);
+
+            for (var j = 0; j < frames.length; j++) {
+                var frameData = frames[j].split(',')[1];
+                folder.file(baseName + '_' + anim.name + '_' + String(j).padStart(4, '0') + '.png', frameData, { base64: true });
+            }
+
+            await sleep(10);
+        }
+
+        batchStatus.textContent = '正在生成 ZIP 文件...';
+        showProgress(0, '正在压缩...');
+
+        var blob = await zip.generateAsync({ type: 'blob' }, function(metadata) {
+            updateProgress(metadata.percent / 100, '压缩中: ' + Math.round(metadata.percent) + '%');
+        });
+
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = baseName + '_all_animations.zip';
+        a.click();
+        URL.revokeObjectURL(url);
+
+        batchStatus.textContent = '全部导出完成 (' + anims.length + ' 个动画)';
+        setStatus('批量导出完成');
+    } catch (err) {
+        alert('批量导出失败: ' + err.message);
+        console.error(err);
+    } finally {
+        isExporting = false;
+        setExportButtonsDisabled(false);
+        hideProgress();
+    }
+}
+
+async function captureAnimationFrames(animName) {
+    var fps = parseInt(document.getElementById('fpsInput').value) || 30;
+    var format = document.getElementById('exportFormat').value;
+    var mimeType = format === 'jpg' ? 'image/jpeg' : format === 'webp' ? 'image/webp' : 'image/png';
+    var quality = format === 'jpg' ? 0.95 : undefined;
+
+    var anim = skeletonData.findAnimation(animName);
+    if (!anim) throw new Error('动画未找到: ' + animName);
+
+    var duration = anim.duration;
+    var totalFrames = Math.max(1, Math.ceil(duration * fps));
+    var dt = duration > 0 ? duration / totalFrames : 0;
+
+    var frames = [];
+    var canvas = document.getElementById('spineCanvas');
+
+    // 处理导出画布尺寸
+    var syncSize = document.getElementById('syncExportSize').checked;
+    var savedWidth = canvas.width;
+    var savedHeight = canvas.height;
+
+    if (!syncSize) {
+        var exportW = parseInt(document.getElementById('exportWidth').value) || savedWidth;
+        var exportH = parseInt(document.getElementById('exportHeight').value) || savedHeight;
+        canvas.width = exportW;
+        canvas.height = exportH;
+    }
+
+    showProgress(0, '捕获帧: 0/' + totalFrames);
+
+    skeleton.setToSetupPose();
+    animationState.clearTracks();
+    animationState.setAnimation(0, animName, false);
+
+    for (var i = 0; i <= totalFrames; i++) {
+        if (i === 0) {
+            animationState.update(0);
+        } else {
+            animationState.update(dt);
+        }
+        animationState.apply(skeleton);
+        skeleton.updateWorldTransform();
+
+        renderFrame();
+
+        var dataUrl = canvas.toDataURL(mimeType, quality);
+        frames.push(dataUrl);
+
+        var progress = (i + 1) / (totalFrames + 1);
+        updateProgress(progress, '捕获帧: ' + (i + 1) + '/' + (totalFrames + 1));
+
+        if (i % 5 === 0) await sleep(1);
+    }
+
+    // 恢复预览画布尺寸
+    if (!syncSize) {
+        canvas.width = savedWidth;
+        canvas.height = savedHeight;
+        renderFrame();
+    }
+
+    return frames;
+}
+
+async function downloadFramesAsZip(frames, prefix) {
+    showProgress(0, '正在创建 ZIP...');
+
+    var zip = new JSZip();
+    var format = document.getElementById('exportFormat').value;
+    var ext = format === 'jpg' ? 'jpg' : format === 'webp' ? 'webp' : 'png';
+
+    for (var i = 0; i < frames.length; i++) {
+        var frameData = frames[i].split(',')[1];
+        zip.file(prefix + '_' + String(i).padStart(4, '0') + '.' + ext, frameData, { base64: true });
+    }
+
+    var blob = await zip.generateAsync({ type: 'blob' }, function(metadata) {
+        updateProgress(metadata.percent / 100, '压缩中: ' + Math.round(metadata.percent) + '%');
+    });
+
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = prefix + '.zip';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// ==================== GIF 导出 ====================
+var gifWorkerUrl = null;
+
+async function ensureGifWorker() {
+    if (gifWorkerUrl) return gifWorkerUrl;
+    var resp = await fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js');
+    var text = await resp.text();
+    var blob = new Blob([text], { type: 'application/javascript' });
+    gifWorkerUrl = URL.createObjectURL(blob);
+    return gifWorkerUrl;
+}
+
+function setExportButtonsDisabled(disabled) {
+    ['btnExport', 'btnExportAll', 'btnExportGif', 'btnExportAllGif'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.disabled = disabled;
+    });
+}
+
+async function captureAnimationGif(animName, onProgress) {
+    var fps = parseInt(document.getElementById('fpsInput').value) || 30;
+    var anim = skeletonData.findAnimation(animName);
+    if (!anim) throw new Error('动画未找到: ' + animName);
+
+    var duration = anim.duration;
+    var totalFrames = Math.max(1, Math.ceil(duration * fps));
+    var dt = duration > 0 ? duration / totalFrames : 0;
+    var delay = Math.round(1000 / fps);
+
+    var canvas = document.getElementById('spineCanvas');
+    var syncSize = document.getElementById('syncExportSize').checked;
+    var savedWidth = canvas.width;
+    var savedHeight = canvas.height;
+
+    if (!syncSize) {
+        canvas.width = parseInt(document.getElementById('exportWidth').value) || savedWidth;
+        canvas.height = parseInt(document.getElementById('exportHeight').value) || savedHeight;
+    }
+
+    var transparent = document.getElementById('transparentBg').checked;
+    var workerUrl = await ensureGifWorker();
+
+    var gifOpts = {
+        workers: 2,
+        quality: 10,
+        width: canvas.width,
+        height: canvas.height,
+        workerScript: workerUrl
+    };
+    // GIF 透明：使用色度键 #01FF01，该颜色像素变透明
+    if (transparent) {
+        gifOpts.transparent = 0x01FF01;
+    }
+    var gif = new GIF(gifOpts);
+
+    var tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    var tempCtx = tempCanvas.getContext('2d');
+
+    skeleton.setToSetupPose();
+    animationState.clearTracks();
+    animationState.setAnimation(0, animName, false);
+
+    for (var i = 0; i <= totalFrames; i++) {
+        animationState.update(i === 0 ? 0 : dt);
+        animationState.apply(skeleton);
+        skeleton.updateWorldTransform();
+        renderFrame();
+
+        // 将 WebGL 画布复制到 2D 画布
+        tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+        tempCtx.drawImage(canvas, 0, 0);
+
+        if (transparent) {
+            // 逐像素处理：完全透明像素设为色度键，半透明像素预合成到黑色背景
+            // 避免先填绿色再叠画面导致半透明边缘出现绿色残影
+            var imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+            var data = imageData.data;
+            for (var p = 0; p < data.length; p += 4) {
+                var a = data[p + 3];
+                if (a === 0) {
+                    // 完全透明 -> 色度键颜色
+                    data[p] = 1;       // R
+                    data[p + 1] = 255; // G
+                    data[p + 2] = 1;   // B
+                    data[p + 3] = 255; // A
+                } else if (a < 255) {
+                    // 半透明 -> 预合成到黑色背景，变为不透明
+                    var alpha = a / 255;
+                    data[p] = Math.round(data[p] * alpha);
+                    data[p + 1] = Math.round(data[p + 1] * alpha);
+                    data[p + 2] = Math.round(data[p + 2] * alpha);
+                    data[p + 3] = 255;
+                }
+            }
+            tempCtx.putImageData(imageData, 0, 0);
+        }
+
+        var frameOpts = { copy: true, delay: delay };
+        if (transparent) frameOpts.dispose = 2;
+        gif.addFrame(tempCtx, frameOpts);
+
+        if (onProgress) onProgress((i + 1) / (totalFrames + 1) * 0.6, '捕获帧: ' + (i + 1) + '/' + (totalFrames + 1));
+        if (i % 5 === 0) await sleep(1);
+    }
+
+    // 恢复画布尺寸
+    if (!syncSize) {
+        canvas.width = savedWidth;
+        canvas.height = savedHeight;
+        renderFrame();
+    }
+
+    // 编码 GIF
+    return new Promise(function(resolve, reject) {
+        gif.on('progress', function(p) {
+            if (onProgress) onProgress(0.6 + p * 0.4, '编码 GIF: ' + Math.round(p * 100) + '%');
+        });
+        gif.on('finished', function(blob) {
+            resolve(blob);
+        });
+        gif.render();
+    });
+}
+
+async function exportCurrentAnimationAsGif() {
+    if (!skeleton || !animationState || !currentAnimName) {
+        alert('请先选择一个动画');
+        return;
+    }
+
+    isExporting = true;
+    pauseAnim();
+    setExportButtonsDisabled(true);
+
+    try {
+        showProgress(0, '准备导出 GIF...');
+        var blob = await captureAnimationGif(currentAnimName, function(p, text) {
+            updateProgress(p, text);
+        });
+
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        var prefix = document.getElementById('prefixInput').value || currentAnimName;
+        a.download = prefix + '.gif';
+        a.click();
+        URL.revokeObjectURL(url);
+
+        setStatus('GIF 导出完成: ' + currentAnimName);
+    } catch (err) {
+        alert('GIF 导出失败: ' + err.message);
+        console.error(err);
+    } finally {
+        isExporting = false;
+        setExportButtonsDisabled(false);
+        hideProgress();
+    }
+}
+
+async function exportAllAnimationsAsGif() {
+    if (!skeletonData) {
+        alert('请先加载 Spine 文件');
+        return;
+    }
+
+    isExporting = true;
+    pauseAnim();
+    setExportButtonsDisabled(true);
+    var batchStatus = document.getElementById('batchStatus');
+
+    try {
+        var zip = new JSZip();
+        var baseName = loadedFiles.skelName ? loadedFiles.skelName.replace(/\.(skel|skel\.bytes|json)$/i, '') : 'spine';
+        var anims = skeletonData.animations;
+
+        for (var i = 0; i < anims.length; i++) {
+            var anim = anims[i];
+            batchStatus.textContent = 'GIF 导出: ' + anim.name + ' (' + (i + 1) + '/' + anims.length + ')';
+
+            var blob = await captureAnimationGif(anim.name, function(p, text) {
+                updateProgress(p, text);
+            });
+            zip.file(anim.name + '.gif', blob);
+            await sleep(10);
+        }
+
+        batchStatus.textContent = '正在生成 ZIP 文件...';
+        showProgress(0, '正在压缩...');
+
+        var zipBlob = await zip.generateAsync({ type: 'blob' }, function(metadata) {
+            updateProgress(metadata.percent / 100, '压缩中: ' + Math.round(metadata.percent) + '%');
+        });
+
+        var url = URL.createObjectURL(zipBlob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = baseName + '_all_gifs.zip';
+        a.click();
+        URL.revokeObjectURL(url);
+
+        batchStatus.textContent = '全部 GIF 导出完成 (' + anims.length + ' 个)';
+        setStatus('批量 GIF 导出完成');
+    } catch (err) {
+        alert('批量 GIF 导出失败: ' + err.message);
+        console.error(err);
+    } finally {
+        isExporting = false;
+        setExportButtonsDisabled(false);
+        hideProgress();
+    }
+}
+
+// ==================== 工具函数 ====================
+function sleep(ms) {
+    return new Promise(function(resolve) { setTimeout(resolve, ms); });
+}
+
+function setStatus(text) {
+    document.getElementById('statusLeft').textContent = text;
+}
+
+function updateStatusRight() {
+    if (!currentAnimName || !skeletonData) return;
+    var anim = skeletonData.findAnimation(currentAnimName);
+    if (anim) {
+        var fps = parseInt(document.getElementById('fpsInput').value) || 30;
+        var frames = Math.ceil(anim.duration * fps);
+        document.getElementById('statusRight').textContent =
+            currentAnimName + ' | ' + anim.duration.toFixed(2) + 's | ~' + frames + ' 帧 @ ' + fps + 'fps';
+    }
+}
+
+function showProgress(value, text) {
+    var container = document.getElementById('progressContainer');
+    container.style.display = '';
+    updateProgress(value, text);
+}
+
+function updateProgress(value, text) {
+    document.getElementById('progressBar').style.width = (value * 100) + '%';
+    document.getElementById('progressText').textContent = text;
+}
+
+function hideProgress() {
+    document.getElementById('progressContainer').style.display = 'none';
+}
+
+// ==================== 导出尺寸同步 ====================
+function syncExportSizeFields() {
+    var sync = document.getElementById('syncExportSize').checked;
+    document.getElementById('exportWidth').disabled = sync;
+    document.getElementById('exportHeight').disabled = sync;
+    if (sync) {
+        document.getElementById('exportWidth').value = document.getElementById('canvasWidth').value;
+        document.getElementById('exportHeight').value = document.getElementById('canvasHeight').value;
+    }
+}
+
+document.getElementById('syncExportSize').addEventListener('change', syncExportSizeFields);
+document.getElementById('canvasWidth').addEventListener('change', function() {
+    if (document.getElementById('syncExportSize').checked) {
+        document.getElementById('exportWidth').value = this.value;
+    }
+});
+document.getElementById('canvasHeight').addEventListener('change', function() {
+    if (document.getElementById('syncExportSize').checked) {
+        document.getElementById('exportHeight').value = this.value;
+    }
+});
+
+// ==================== 初始化 ====================
+// WebGL 能力检查 (不依赖 Spine 运行时)
+(function() {
+    var c = document.createElement('canvas');
+    if (!c.getContext('webgl') && !c.getContext('experimental-webgl')) {
+        document.getElementById('statusLeft').textContent = 'WebGL 不可用，请使用支持 WebGL 的浏览器';
+    }
+    // 初始化导出尺寸字段状态
+    syncExportSizeFields();
+})();
+
+// 监听设置变化实时更新状态栏
+document.getElementById('fpsInput').addEventListener('change', updateStatusRight);
+
+</script>
+</body>
+</html>
